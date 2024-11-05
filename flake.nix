@@ -29,7 +29,6 @@
             rustfmt
             clippy
           ] ++ cargoBuildInputs;
-          packages = [ pkgs.git ];
         };
       }
     );
