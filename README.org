@@ -1,3 +1,4 @@
+
 #+options: :toc t
 
 * Mach-O Linking and Loading
@@ -357,3 +358,66 @@ This section describes the files found in [[file:05--versioning]].
 :END:
 
 This section describes the files found in [[file:06--library-path]].
+
+** Rust invocation
+:PROPERTIES:
+:header-args:sh: :dir 07--rust-invocation
+:END:
+
+This section describes the files found in [[file:07--rust-invocation]].
+
+As an extension on [[Dynamic Library Linking]], it is also possible to link dynamic libraries from other languages. This section details loading `.dylib` into a Rust program using the crate [[https://docs.rs/libloading/latest/libloading/][libloading]].
+
+
+With a built `.dylib` file from [[Dynamic Library Linking]], which includes a function `uint64 foo(uint64, uint64)` that returns the sum of the two inputs, it is possible to load this into a Rust program through:
+#+begin_src rust
+  // required imports
+  use libloading::Library;
+  use libloading::Symbol;
+
+  unsafe {
+      let lib = Library::new("/path/to/lib.dylib").unwrap();
+      let foo_u64_fn: Symbol<unsafe extern "C" fn(u64, u64) -> u64> = lib.get(b"foo\0").unwrap();
+
+      // example call
+      let res = foo_f64_fn(42, 24); // res = 66 
+  }
+#+end_src
+
+It is worth noting that since this is an external call, Rust wraps interaction with the `.dylib` as `unsafe`.
+
+Further, `foo_u64_fn` is defined with the specific function definition found in the library. Although this linking is pretty seamless, as this is an external call, there is no checks as to whether the type of `foo_u64_fn` is correct. As a dynamic library, this will only be loaded into the program at runtime.
+
+Hence, errors such as the following will not be noticed until runtime:
+
+#+begin_src rust
+  // same imports ommitted
+
+  unsafe {
+      let lib = Library::new("/path/to/lib.dylib").unwrap();
+      let foo_u64_fn: Symbol<unsafe extern "C" fn(String, String) -> String> = lib.get(b"foo\0").unwrap();
+x
+      // example call
+      let res = foo_f64_fn("42", "24"); // unpredictable behaviour
+  }
+#+end_src
+The above will panic when ran.
+
+However, similar to  [[Dynamic Library Linking]]'s `foo(2ull, 2ull)`, calling `foo_u64_fn('a', 2ull)`  would actuall still run. This is because the `dylib` treats 'a' as its ASCII value (97). And so will return 97 + 2 = 99.
+
+
+It is also possible to link `dylib` written in Rust.
+
+#+begin_src rust
+  // inside rust_dylib.rs
+
+  #[export_name = "foo_func"]
+  pub extern "C" fn foo(a: u64, b: u64) -> u64 {
+      return a + b;
+  }
+
+
+  // caller
+  let lib = Library::new("/path/to/lib.dylib").unwrap();
+        let foo_u64_fn: Symbol<unsafe extern "C" fn(u64, u64) -> String> = lib.get(b"foo_func\0").unwrap();
+#+end_src
